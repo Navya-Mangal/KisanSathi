@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="hi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>किसान साथी</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--g:#1d5c36;--y:#e3a600;--bg:#f6f8f2;--ink:#17261c;--bad:#a63a2b}
+*{box-sizing:border-box}body{margin:0;font-family:'Noto Sans Devanagari',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:18px;line-height:1.6}
+header{background:var(--g);color:#fff;padding:18px 16px}h1{margin:0;font-size:26px;font-weight:800}header p{margin:2px 0 0;opacity:.85}
+main{max-width:560px;margin:0 auto;padding:16px}section{background:#fff;border:2px solid #dfe6d6;border-radius:14px;padding:16px;margin-bottom:16px}
+h2{margin:0 0 10px;font-size:21px}
+.btn{display:block;width:100%;padding:16px;border:0;border-radius:12px;font-weight:700;font-size:20px;font-family:inherit;background:var(--y);color:#2b2000;cursor:pointer;text-align:center}
+.btn:focus-visible,select:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+.btn.alt{background:var(--g);color:#fff}input[type=file]{display:none}
+#prev{width:100%;border-radius:12px;margin-top:12px;display:none}
+.res{margin-top:12px}.bar{height:12px;background:#e6ece0;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
+.warn{background:#fff4d6;border-left:6px solid var(--y);padding:10px;border-radius:8px;margin-bottom:10px}
+select{width:100%;padding:12px;font:inherit;border-radius:10px;border:2px solid #cdd8c3;margin-bottom:10px}
+table{width:100%;border-collapse:collapse}td,th{padding:8px 4px;border-bottom:1px solid #e6ece0;text-align:left}th{font-size:15px}.best td{font-weight:700;color:var(--g)}
+.err{color:var(--bad)}
+</style></head><body>
+<header><h1>🌾 किसान साथी</h1><p>पत्ते की फोटो खींचें, बीमारी और मंडी भाव जानें</p></header>
+<main>
+<section><h2>फसल की बीमारी पहचानें</h2>
+<label class="btn" for="cam">📷 फोटो खींचें / चुनें</label>
+<input id="cam" type="file" accept="image/*" capture="environment">
+<img id="prev" alt="चुनी गई फोटो"><div id="out" class="res" aria-live="polite"></div></section>
+<section><h2>मंडी भाव (राजस्थान)</h2>
+<select id="crop"><option value="Wheat">गेहूं</option><option value="Mustard">सरसों</option><option value="Bajra(Pearl Millet/Cumbu)">बाजरा</option><option value="Tomato">टमाटर</option><option value="Onion">प्याज</option></select>
+<button class="btn alt" id="go">भाव देखें</button><div id="mandi" class="res"></div></section>
+</main>
+<script>
+const API = location.protocol==='file:' ? 'http://localhost:8000' : '';
+const $=id=>document.getElementById(id);
+async function shrink(f){const b=await createImageBitmap(f),s=Math.min(1,800/Math.max(b.width,b.height));
+ const c=document.createElement('canvas');c.width=b.width*s;c.height=b.height*s;c.getContext('2d').drawImage(b,0,0,c.width,c.height);
+ return new Promise(r=>c.toBlob(r,'image/jpeg',.85));}
+$('cam').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+ $('prev').src=URL.createObjectURL(f);$('prev').style.display='block';$('out').textContent='जांच हो रही है…';
+ const fd=new FormData();fd.append('file',await shrink(f),'leaf.jpg');
+ try{const r=await fetch(API+'/api/predict',{method:'POST',body:fd});const d=await r.json();
+  if(!r.ok)throw new Error(d.detail);
+  $('out').innerHTML=(d.confident?'':'<div class="warn">⚠️ पक्का नहीं है। साफ़ रोशनी में दोबारा फोटो लें या KVK से पूछें।</div>')+
+   d.results.map(x=>`<p><b>${x.disease.replace(/_+/g,' ')}</b> — ${Math.round(x.confidence*100)}%</p><div class="bar"><i style="width:${x.confidence*100}%"></i></div>`).join('')+
+   `<p><b>सलाह:</b> ${d.advice}</p>`;
+ }catch(err){$('out').innerHTML=`<p class="err">${err.message}</p>`}};
+$('go').onclick=async()=>{$('mandi').textContent='लोड हो रहा है…';
+ try{const r=await fetch(API+'/api/mandi?commodity='+encodeURIComponent($('crop').value));const d=await r.json();
+  if(!r.ok)throw new Error(d.detail);
+  $('mandi').innerHTML=d.rows.length?'<table><tr><th>मंडी</th><th>औसत ₹/क्विंटल</th><th>तारीख</th></tr>'+
+   d.rows.slice(0,8).map((x,i)=>`<tr class="${i?'':'best'}"><td>${x.market}</td><td>${x.modal}</td><td>${x.date}</td></tr>`).join('')+'</table>':'आज इस फसल का भाव उपलब्ध नहीं।';
+ }catch(err){$('mandi').innerHTML=`<p class="err">${err.message}</p>`}};
+</script></body></html>
